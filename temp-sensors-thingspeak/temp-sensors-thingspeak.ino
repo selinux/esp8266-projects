@@ -27,13 +27,12 @@
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-
 OneWire  ds(14);  // on pin 2 (a 4.7K resistor is necessary)
+
 
 void setup() {
 
-#ifdef DEBUG    
-
+#ifdef DEBUG
     Serial.begin(115200);
     delay(10);
 
@@ -44,8 +43,9 @@ void setup() {
 #endif
 
 
+/******* re-connect to wifi ***********/
+
     WiFi.begin(WI_SSID, WI_PASSWD);
-  
     while (WiFi.status() != WL_CONNECTED) {
 
 #ifdef DEBUG
@@ -61,9 +61,8 @@ void setup() {
     Serial.println("WiFi connected");
 #endif
 
-}
 
-void loop() {
+/******* Do the job **********/
 
     float temp = get_temperature();
     unsigned int lum = get_luminosity();
@@ -75,9 +74,19 @@ void loop() {
     Serial.println("ESP8266 in sleep mode");
 #endif
 
-    // delay(10000);
+
+/******* enter in deep sleep **********/
+
     ESP.deepSleep(SLEEP * 1000000);
-    
+
+}
+
+
+void loop() {
+
+    /* After deep sleep reset is activated by pin D0 (bridged to RST)
+     * setup() is re-executed but loop() is not
+     */
 }
 
 
