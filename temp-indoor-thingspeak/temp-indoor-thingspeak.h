@@ -25,12 +25,11 @@
 
 #define SLEEP               60
 
-#define DHTTYPE           DHT22     // DHT 22 (AM2302)
 
-#define OUT_TEMPERATURE_TOPIC   "pub/sensor_window/outside_temperature"
-#define IN_TEMPERATURE_TOPIC   "pub/sensor_window/inside_temperature"
-#define HUMIDITY_TOPIC   "pub/sensor_window/humidity"
-#define LIGHT_TOPIC         "pub/sensor_window/light"
+#define TEMPERATURE_TOPIC   "pub/sensor_inside/temperature"
+#define PRESSURE_TOPIC   "pub/sensor_inside/pressure"
+#define ALTITUDE_TOPIC   "pub/sensor_inside/altitude"
+#define LIGHT_TOPIC         "pub/sensor_inside/light"
 
 #define DEBUG
 
@@ -46,3 +45,5 @@ unsigned int get_luminosity();
 
 float get_outside_temperature();
 
+void printBME280Data(Stream * client);
+void printBME280CalculatedData(Stream* client);

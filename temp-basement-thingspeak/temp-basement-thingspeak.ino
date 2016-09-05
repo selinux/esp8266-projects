@@ -1,7 +1,7 @@
 /*
  * =====================================================================================
  *
- *       Filename:  temp-sensors-thingspeak.ino
+ *       Filename:  temp-basement-thingspeak.ino
  *
  *    Description:  Temperature and brightness sensors on a ESP8266 who broadcast to
  *                  thingspeak server and MQTT broker
@@ -18,19 +18,17 @@
  */
 
 #include <ESP8266WiFi.h>
-#include <OneWire.h>
 #include <PubSubClient.h>
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
 
-#include "temp-sensors-thingspeak.h"
+#include "temp-basement-thingspeak.h"
 #include "secrets.h"
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-OneWire  ds(THERMO_PIN);  // on pin 2 (a 4.7K resistor is necessary)
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
@@ -69,9 +67,8 @@ void setup() {
 
 /******* Do the job **********/
 
-    float temp_out = get_outside_temperature();
     unsigned int lum = get_luminosity();
-    float temp_in = 0.0;
+    float temp = 0.0;
     float hum = 0.0;
 
     dht.begin();
@@ -88,10 +85,10 @@ void setup() {
         while(1){}
         
     } else {
-        temp_in = event.temperature;
+        temp = event.temperature;
 #ifdef DEBUG            
         Serial.print("    Temperature: ");
-        Serial.print(temp_in);
+        Serial.print(temp);
         Serial.println(" *C");
 #endif            
     }
@@ -116,8 +113,8 @@ void setup() {
 
 /******* Send values **********/
 
-    thingspeak_send(temp_out, temp_in, hum, lum);
-    mqtt_send(temp_out, temp_in, hum, lum);
+    thingspeak_send(temp, hum, lum);
+    mqtt_send(temp, hum, lum);
 
 
 #ifdef DEBUG
@@ -143,7 +140,7 @@ void loop() {
  * @temp temperature value
  * @lum luminosity value
  */
-void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum) {
+void thingspeak_send(float temp, float hum, unsigned int lum) {
 
     if ( espClient.connect(TH_SERVER, 80) ) {
 
@@ -153,12 +150,10 @@ void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum)
 
         String postStr = TH_APIKEY;
         postStr +="&field1=";
-        postStr += String(temp_out);
+        postStr += String(temp);
         postStr +="&field2=";
-        postStr += String(temp_in);
-        postStr +="&field3=";
         postStr += String(hum);
-        postStr +="&field4=";
+        postStr +="&field3=";
         postStr += String(lum);
         postStr += "\r\n\r\n";
 
@@ -188,7 +183,7 @@ void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum)
  * @lum luminosity value
  s
  */
-void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum) {
+void mqtt_send(float temp, float hum, unsigned int lum) {
 
     client.setServer(MQTT_SERVER, 1883);
 
@@ -201,8 +196,7 @@ void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum) {
 #endif
 
     client.loop();
-    client.publish(OUT_TEMPERATURE_TOPIC, String(temp_out).c_str(), true);
-    client.publish(IN_TEMPERATURE_TOPIC, String(temp_in).c_str(), true);
+    client.publish(TEMPERATURE_TOPIC, String(temp).c_str(), true);
     client.publish(HUMIDITY_TOPIC, String(hum).c_str(), true);
     client.publish(LIGHT_TOPIC, String(lum).c_str(), true);
 
@@ -258,84 +252,10 @@ unsigned int get_luminosity() {
 
 #ifdef DEBUG
     Serial.print("    Luminosity = ");
-    Serial.print(map(val, 0, 1023, 0, 100));
+    Serial.print(map(val, 0, 1023, 0, 99));
     Serial.println();
 #endif
 
-    return map(val, 0, 1023, 0, 100);
+    return map(val, 0, 1023, 0, 99);
 }
 
-
-/** Get temperature from DS18B20
- *
- * @return sensor value (float)
- */
-float get_outside_temperature() {
-
-    byte type_s;
-    byte addr[8];
-    byte data[12];
-    byte present = 0;
-
-    int i = 0;
-
-    while ( !ds.search(addr) ) {
-        ds.reset_search();
-        delay(250);
-
-#ifdef DEBUG
-        Serial.println("One-wire sensore not found");
-        Serial.println();
-#endif
-        if(++i > 10) {
-
-#ifdef DEBUG
-            Serial.println("Something wrong with temp sensor...waiting for watchdog reset");
-            Serial.println();
-#endif
-            while(1){}
-        }
-    }
-
-    ds.reset();
-    ds.select(addr);
-    ds.write(0x44, 1);       // start conversion, with parasite power on at the end
-    delay(750);              // wait for acquisition 750ms is enough, maybe not
-
-    present = ds.reset();
-    ds.select(addr);
-    ds.write(0xBE);                     // Read Scratchpad
-    for ( int i = 0; i < 9; i++)        // we need 9 bytes
-        data[i] = ds.read();
-
-
-    // Convert the data to actual temperature
-    int16_t raw = (data[1] << 8) | data[0];
-
-    if (type_s) {
-
-        raw = raw << 3; // 9 bit resolution default
-
-        // "count remain" gives full 12 bit resolution
-        if (data[7] == 0x10)
-            raw = (raw & 0xFFF0) + 12 - data[6];
-
-    } else {
-        byte cfg = (data[4] & 0x60);
-        // at lower res, the low bits are undefined, so let's zero them
-        if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
-        else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
-        else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
-        //// default is 12 bit resolution, 750 ms conversion time
-    }
-
-#ifdef DEBUG
-    Serial.println("=======  Aquisition ========");
-    Serial.println();
-    Serial.print("    Temperature = ");
-    Serial.print((float)raw / 16.0);
-    Serial.println(" Celsius, ");
-#endif
-
-    return (float)raw / 16.0;
-}

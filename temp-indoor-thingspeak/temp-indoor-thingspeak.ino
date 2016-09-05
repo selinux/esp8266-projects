@@ -18,23 +18,19 @@
  */
 
 #include <ESP8266WiFi.h>
-#include <OneWire.h>
 #include <PubSubClient.h>
 #include <Adafruit_Sensor.h>
-#include <DHT.h>
-#include <DHT_U.h>
+#include <BME280.h>
 
-#include "temp-sensors-thingspeak.h"
+#include "temp-indoor-thingspeak.h"
 #include "secrets.h"
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-OneWire  ds(THERMO_PIN);  // on pin 2 (a 4.7K resistor is necessary)
 
-DHT_Unified dht(DHTPIN, DHTTYPE);
-
-int measureTime;
+BME280 bme;
+bool metric = true;
 
 void setup() {
 
@@ -69,55 +65,32 @@ void setup() {
 
 /******* Do the job **********/
 
-    float temp_out = get_outside_temperature();
-    unsigned int lum = get_luminosity();
-    float temp_in = 0.0;
-    float hum = 0.0;
-
-    dht.begin();
-    sensor_t sensor;
-    dht.temperature().getSensor(&sensor);
-    sensors_event_t event;  
-    dht.temperature().getEvent(&event);
-
-    if (isnan(event.temperature)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 temperature...waiting for watchdog reset");
-        Serial.println();
-#endif
-        while(1){}
-        
-    } else {
-        temp_in = event.temperature;
-#ifdef DEBUG            
-        Serial.print("    Temperature: ");
-        Serial.print(temp_in);
-        Serial.println(" *C");
-#endif            
+    while(!bme.begin()){
+        Serial.println("Could not find BME280 sensor!");
+        delay(1000);
     }
+    
+    float temp(NAN), hum(NAN), pressure;
+    uint8_t pressureUnit(1);
+    bme.ReadData(pressure, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+    float alt = bme.CalculateAltitude(metric);
 
-    dht.humidity().getEvent(&event);
+    unsigned int lum = get_luminosity();
 
-    if (isnan(event.relative_humidity)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 humidity...waiting for watchdog reset");
-        Serial.println();
-#endif
-        while(1){}
-        
-    } else {
-        hum = event.relative_humidity;
-#ifdef DEBUG
-        Serial.print("    Humidity: ");
-        Serial.print(hum);
-        Serial.println("%");
-#endif 
-        }
+    Serial.print("    Temp : ");
+    Serial.print(temp);
+    Serial.println(" °C");
+    Serial.print("    Pressure : ");
+    Serial.print(pressure);
+    Serial.println(" hPa");
+    Serial.print("    Alt : ");
+    Serial.print(alt);
+    Serial.println("m");
 
 /******* Send values **********/
 
-    thingspeak_send(temp_out, temp_in, hum, lum);
-    mqtt_send(temp_out, temp_in, hum, lum);
+    thingspeak_send(temp, pressure, alt, lum);
+    mqtt_send(temp, pressure, alt, lum);
 
 
 #ifdef DEBUG
@@ -143,7 +116,7 @@ void loop() {
  * @temp temperature value
  * @lum luminosity value
  */
-void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum) {
+void thingspeak_send(float temp, float pressure, float alt, unsigned int lum) {
 
     if ( espClient.connect(TH_SERVER, 80) ) {
 
@@ -153,11 +126,11 @@ void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum)
 
         String postStr = TH_APIKEY;
         postStr +="&field1=";
-        postStr += String(temp_out);
+        postStr += String(temp);
         postStr +="&field2=";
-        postStr += String(temp_in);
+        postStr += String(pressure);
         postStr +="&field3=";
-        postStr += String(hum);
+        postStr += String(alt);
         postStr +="&field4=";
         postStr += String(lum);
         postStr += "\r\n\r\n";
@@ -188,7 +161,7 @@ void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum)
  * @lum luminosity value
  s
  */
-void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum) {
+void mqtt_send(float temp, float pressure, float alt, unsigned int lum) {
 
     client.setServer(MQTT_SERVER, 1883);
 
@@ -201,9 +174,9 @@ void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum) {
 #endif
 
     client.loop();
-    client.publish(OUT_TEMPERATURE_TOPIC, String(temp_out).c_str(), true);
-    client.publish(IN_TEMPERATURE_TOPIC, String(temp_in).c_str(), true);
-    client.publish(HUMIDITY_TOPIC, String(hum).c_str(), true);
+    client.publish(TEMPERATURE_TOPIC, String(temp).c_str(), true);
+    client.publish(PRESSURE_TOPIC, String(pressure).c_str(), true);
+    client.publish(ALTITUDE_TOPIC, String(alt).c_str(), true);
     client.publish(LIGHT_TOPIC, String(lum).c_str(), true);
 
 #ifdef DEBUG
@@ -265,77 +238,38 @@ unsigned int get_luminosity() {
     return map(val, 0, 1023, 0, 100);
 }
 
+void printBME280Data(Stream* client){
+  float temp(NAN), hum(NAN), pres(NAN);
+  uint8_t pressureUnit(3);   // unit: B000 = Pa, B001 = hPa, B010 = Hg, B011 = atm, B100 = bar, B101 = torr, B110 = N/m^2, B111 = psi
+  bme.ReadData(pres, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+  /* Alternatives to ReadData():
+    float ReadTemperature(bool celsius = false);
+    float ReadPressure(uint8_t unit = 0);
+    float ReadHumidity();
 
-/** Get temperature from DS18B20
- *
- * @return sensor value (float)
- */
-float get_outside_temperature() {
-
-    byte type_s;
-    byte addr[8];
-    byte data[12];
-    byte present = 0;
-
-    int i = 0;
-
-    while ( !ds.search(addr) ) {
-        ds.reset_search();
-        delay(250);
-
-#ifdef DEBUG
-        Serial.println("One-wire sensore not found");
-        Serial.println();
-#endif
-        if(++i > 10) {
-
-#ifdef DEBUG
-            Serial.println("Something wrong with temp sensor...waiting for watchdog reset");
-            Serial.println();
-#endif
-            while(1){}
-        }
-    }
-
-    ds.reset();
-    ds.select(addr);
-    ds.write(0x44, 1);       // start conversion, with parasite power on at the end
-    delay(750);              // wait for acquisition 750ms is enough, maybe not
-
-    present = ds.reset();
-    ds.select(addr);
-    ds.write(0xBE);                     // Read Scratchpad
-    for ( int i = 0; i < 9; i++)        // we need 9 bytes
-        data[i] = ds.read();
-
-
-    // Convert the data to actual temperature
-    int16_t raw = (data[1] << 8) | data[0];
-
-    if (type_s) {
-
-        raw = raw << 3; // 9 bit resolution default
-
-        // "count remain" gives full 12 bit resolution
-        if (data[7] == 0x10)
-            raw = (raw & 0xFFF0) + 12 - data[6];
-
-    } else {
-        byte cfg = (data[4] & 0x60);
-        // at lower res, the low bits are undefined, so let's zero them
-        if (cfg == 0x00) raw = raw & ~7;  // 9 bit resolution, 93.75 ms
-        else if (cfg == 0x20) raw = raw & ~3; // 10 bit res, 187.5 ms
-        else if (cfg == 0x40) raw = raw & ~1; // 11 bit res, 375 ms
-        //// default is 12 bit resolution, 750 ms conversion time
-    }
-
-#ifdef DEBUG
-    Serial.println("=======  Aquisition ========");
-    Serial.println();
-    Serial.print("    Temperature = ");
-    Serial.print((float)raw / 16.0);
-    Serial.println(" Celsius, ");
-#endif
-
-    return (float)raw / 16.0;
+    Keep in mind the temperature is used for humidity and
+    pressure calculations. So it is more effcient to read
+    temperature, humidity and pressure all together.
+   */
+  client->print("Temp: ");
+  client->print(temp);
+  client->print("°"+ String(metric ? 'C' :'F'));
+  client->print("\t\tHumidity: ");
+  client->print(hum);
+  client->print("% RH");
+  client->print("\t\tPressure: ");
+  client->print(pres);
+  client->print(" atm");
 }
+void printBME280CalculatedData(Stream* client){
+  float altitude = bme.CalculateAltitude(metric);
+  float dewPoint = bme.CalculateDewPoint(metric);
+  client->print("\t\tAltitude: ");
+  client->print(altitude);
+  client->print((metric ? "m" : "ft"));
+  client->print("\t\tDew point: ");
+  client->print(dewPoint);
+  client->println("°"+ String(metric ? 'C' :'F'));
+
+}
+
