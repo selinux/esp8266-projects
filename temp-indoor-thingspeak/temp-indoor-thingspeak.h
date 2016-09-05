@@ -27,9 +27,10 @@
 
 
 #define TEMPERATURE_TOPIC   "pub/sensor_inside/temperature"
-#define PRESSURE_TOPIC   "pub/sensor_inside/pressure"
-#define ALTITUDE_TOPIC   "pub/sensor_inside/altitude"
+#define PRESSURE_TOPIC      "pub/sensor_inside/pressure"
+#define ALTITUDE_TOPIC      "pub/sensor_inside/altitude"
 #define LIGHT_TOPIC         "pub/sensor_inside/light"
+#define GEIGER_TOPIC        "pub/sensor_inside/geiger"
 
 #define DEBUG
 
@@ -37,9 +38,9 @@
 
 void mqtt_reconnect();
 
-void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum);
+void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum, float cpm);
 
-void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum);
+void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum, float cpm);
 
 unsigned int get_luminosity();
 

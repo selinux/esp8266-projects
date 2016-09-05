@@ -32,6 +32,9 @@ PubSubClient client(espClient);
 BME280 bme;
 bool metric = true;
 
+int measureTime, geigerRefTime;
+unsigned int counter;
+
 void setup() {
 
 #ifdef DEBUG
@@ -69,37 +72,12 @@ void setup() {
         Serial.println("Could not find BME280 sensor!");
         delay(1000);
     }
-    
-    float temp(NAN), hum(NAN), pressure;
-    uint8_t pressureUnit(1);
-    bme.ReadData(pressure, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
-    float alt = bme.CalculateAltitude(metric);
 
-    unsigned int lum = get_luminosity();
+    measureTime = millis();
+    geigerRefTime = micros();
 
-    Serial.print("    Temp : ");
-    Serial.print(temp);
-    Serial.println(" °C");
-    Serial.print("    Pressure : ");
-    Serial.print(pressure);
-    Serial.println(" hPa");
-    Serial.print("    Alt : ");
-    Serial.print(alt);
-    Serial.println("m");
+    attachInterrupt(D7, countPulse, FALLING);
 
-/******* Send values **********/
-
-    thingspeak_send(temp, pressure, alt, lum);
-    mqtt_send(temp, pressure, alt, lum);
-
-
-#ifdef DEBUG
-    Serial.println("ESP8266 in sleep mode");
-#endif
-
-/******* entering in deep sleep **********/
-
-    ESP.deepSleep(SLEEP * 1000000);
 }
 
 
@@ -108,15 +86,59 @@ void loop() {
     /* After deep sleep reset is activated by pin D0 (bridged to RST)
      * setup() is re-executed but loop() is not
      */
+     if(millis() > measureTime){
+
+        measureTime = millis() + SLEEP * 1000;
+        
+        int elapsedTime = micros() - geigerRefTime;
+
+        noInterrupts();
+        unsigned int cpm = (float(counter)/elapsedTime)*60000000;
+        counter = 0;
+        geigerRefTime = micros();  //reset 
+        interrupts();
+        
+        
+        float temp(NAN), hum(NAN), pressure;
+        uint8_t pressureUnit(1);
+        bme.ReadData(pressure, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+        float alt = bme.CalculateAltitude(metric);
+  
+        unsigned int lum = get_luminosity();
+  
+        Serial.print("    Temp : ");
+        Serial.print(temp);
+        Serial.println(" °C");
+        Serial.print("    Pressure : ");
+        Serial.print(pressure);
+        Serial.println(" hPa");
+        Serial.print("    Alt : ");
+        Serial.print(alt);
+        Serial.println("m");
+        Serial.print("    Geiger counter : ");
+        Serial.print(cpm);
+        Serial.println(" cpm");
+        /******* Send values **********/
+  
+        thingspeak_send(temp, pressure, alt, lum, cpm);
+        mqtt_send(temp, pressure, alt, lum, cpm);
+     }
 }
 
+/** Interrupt (simple counter 
+ *  
+ */
+ void countPulse(){
+
+      counter++;
+ }
 
 /** Send sensors values to Thinkspeak server
  *
  * @temp temperature value
  * @lum luminosity value
  */
-void thingspeak_send(float temp, float pressure, float alt, unsigned int lum) {
+void thingspeak_send(float temp, float pressure, float alt, unsigned int lum, float cpm) {
 
     if ( espClient.connect(TH_SERVER, 80) ) {
 
@@ -133,6 +155,8 @@ void thingspeak_send(float temp, float pressure, float alt, unsigned int lum) {
         postStr += String(alt);
         postStr +="&field4=";
         postStr += String(lum);
+        postStr +="&field5=";
+        postStr += String(cpm);
         postStr += "\r\n\r\n";
 
         espClient.print("POST /update HTTP/1.1\n");
@@ -161,7 +185,7 @@ void thingspeak_send(float temp, float pressure, float alt, unsigned int lum) {
  * @lum luminosity value
  s
  */
-void mqtt_send(float temp, float pressure, float alt, unsigned int lum) {
+void mqtt_send(float temp, float pressure, float alt, unsigned int lum, float cpm) {
 
     client.setServer(MQTT_SERVER, 1883);
 
@@ -178,6 +202,7 @@ void mqtt_send(float temp, float pressure, float alt, unsigned int lum) {
     client.publish(PRESSURE_TOPIC, String(pressure).c_str(), true);
     client.publish(ALTITUDE_TOPIC, String(alt).c_str(), true);
     client.publish(LIGHT_TOPIC, String(lum).c_str(), true);
+    client.publish(GEIGER_TOPIC, String(cpm).c_str(), true);
 
 #ifdef DEBUG
     Serial.println("Sensors values sent to MQTT server");
