@@ -20,17 +20,20 @@
 #include <ESP8266WiFi.h>
 #include <OneWire.h>
 #include <PubSubClient.h>
-#include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
 
 #include "temp-sensors-thingspeak.h"
 #include "secrets.h"
+#include "ota.h"
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+#ifdef ONEWIRE
 OneWire  ds(THERMO_PIN);  // on pin 2 (a 4.7K resistor is necessary)
+#endif
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
@@ -67,13 +70,24 @@ void setup() {
     Serial.println("WiFi connected");
 #endif
 
+
+/******* OTA **********/
+#ifdef OTA
+    updateOTA();
+#endif
+
 /******* Do the job **********/
 
-    float temp_out = get_outside_temperature();
+    float temp_out = 0;
     unsigned int lum = get_luminosity();
     float temp_in = 0.0;
     float hum = 0.0;
 
+#ifdef ONEWIRE
+    temp_out = get_outside_temperature();
+#endif
+
+#ifdef DHTTEMP
     dht.begin();
     sensor_t sensor;
     dht.temperature().getSensor(&sensor);
@@ -82,7 +96,7 @@ void setup() {
 
     if (isnan(event.temperature)) {
 #ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 temperature...waiting for watchdog reset");
+        Serial.println("Something went wrong with DHT22 temperature...waiting for watchdog reset");
         Serial.println();
 #endif
         while(1){}
@@ -113,12 +127,13 @@ void setup() {
         Serial.println("%");
 #endif 
         }
+#else
 
+#endif
 /******* Send values **********/
 
     thingspeak_send(temp_out, temp_in, hum, lum);
     mqtt_send(temp_out, temp_in, hum, lum);
-
 
 #ifdef DEBUG
     Serial.println("ESP8266 in sleep mode");
@@ -248,13 +263,8 @@ void mqtt_reconnect() {
 unsigned int get_luminosity() {
 
     pinMode(ANALOG_PIN, INPUT);
-    pinMode(COMPARE_PIN, OUTPUT);
 
-    // Compare pin act as a pull up
-    digitalWrite(COMPARE_PIN, HIGH);
-    delay(1);
     unsigned int val = analogRead(ANALOG_PIN);
-    digitalWrite(COMPARE_PIN, LOW);
 
 #ifdef DEBUG
     Serial.print("    Luminosity = ");
@@ -265,7 +275,7 @@ unsigned int get_luminosity() {
     return map(val, 0, 1023, 0, 100);
 }
 
-
+#ifdef ONEWIRE
 /** Get temperature from DS18B20
  *
  * @return sensor value (float)
@@ -279,9 +289,11 @@ float get_outside_temperature() {
 
     int i = 0;
 
+
     while ( !ds.search(addr) ) {
         ds.reset_search();
         delay(250);
+
 
 #ifdef DEBUG
         Serial.println("One-wire sensore not found");
@@ -339,3 +351,5 @@ float get_outside_temperature() {
 
     return (float)raw / 16.0;
 }
+#endif
+
