@@ -79,9 +79,9 @@ void setup() {
 /******* entering in deep sleep **********/
 
     if(!isUpdating) {
-        ESP.deepSleep(SLEEP * 1000000);
         Serial.print(ESPID);
         Serial.println(" in sleep mode");
+        ESP.deepSleep(SLEEP * 1000000);
 
     } else {
         Serial.println("Updating...");
@@ -115,8 +115,8 @@ unsigned int get_luminosity() {
     digitalWrite(COMPARE_PIN, LOW);
 
     Serial.println("Luminosity :\t");
-    Serial.println(map(val, 0, 199, 0, 99));
+    Serial.println(map(val, 0, 1023, 0, 99));
     Serial.println("---------------------------------------------------");
-    return map(val, 0, 199, 0, 99);
+    return map(val, 0, 1023, 0, 99);
 }
 

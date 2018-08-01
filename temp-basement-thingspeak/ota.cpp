@@ -22,6 +22,7 @@
 
 #include <ESP8266mDNS.h>
 #include <PubSubClient.h>
+#include "ThingSpeak.h"
 
 #include <ESP8266httpUpdate.h>
 
@@ -44,9 +45,11 @@ IPAddress mqttsrv(172, 16, 10, 251);
 
 PubSubClient client(mqttsrv, 1883, espClient);
 
-
-
 MDNSResponder mdns;
+
+unsigned long channelID = 146450;
+const char* TH_APIKEY = "5SB9TB967M77361H";
+
 
 /**
  * 
@@ -111,33 +114,19 @@ void setup_wifi() {
  * @lum luminosity value
  */
 void thingspeak_send(const float temp, const float hum, const unsigned int lum) {
-
-    if ( espClient.connect(TH_SERVER, 80) ) {
-
-        Serial.println("Connecting to thingspeak server");
-
-        String postStr = TH_APIKEY;
-        postStr +="&field1=";
-        postStr += String(temp);
-        postStr +="&field2=";
-        postStr += String(hum);
-        postStr +="&field3=";
-        postStr += String(lum);
-        postStr += "\r\n\r\n";
-
-        espClient.print("POST /update HTTP/1.1\n");
-        espClient.print("Host: api.thingspeak.com\n");
-        espClient.print("Connection: close\n");
-        espClient.print("X-THINGSPEAKAPIKEY: "+TH_APIKEY+"\n");
-        espClient.print("Content-Type: application/x-www-form-urlencoded\n");
-        espClient.print("Content-Length: ");
-        espClient.print(postStr.length());
-        espClient.print("\n\n");
-        espClient.print(postStr);
-
-        Serial.println("Sensors values sent to thingspeak server");
-        Serial.println();
+  
+    ThingSpeak.begin(espClient);
+    ThingSpeak.setField( 1, String(temp).c_str());
+    ThingSpeak.setField( 2, String(hum).c_str());
+    ThingSpeak.setField( 3, String(lum).c_str());
+   
+    if (ThingSpeak.writeFields( channelID, TH_APIKEY ) ){
+        Serial.println("Successfully sent values to ThingSpeak...");       
     }
+
+//    ThingSpeak.writeField(channelID, 1, String(temp).c_str(), TH_APIKEY);
+
+    espClient.stop();
 
 }
 
@@ -150,11 +139,9 @@ void thingspeak_send(const float temp, const float hum, const unsigned int lum) 
  */
 void mqtt_send(const float temp, const float hum, const unsigned int lum) {
 
-//    client.setServer(mqttsrv, 1883);
-
     while (!client.connected()) {
         Serial.println("Connecting to MQTT...");
- 
+
         if (client.connect("ESP8266Client", "selinux", "cooldump" )) {
  
             Serial.println("connected");
