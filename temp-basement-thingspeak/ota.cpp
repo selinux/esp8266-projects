@@ -21,12 +21,30 @@
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
 #include <ESP8266mDNS.h>
+#include <PubSubClient.h>
 
 #include <ESP8266httpUpdate.h>
 
+#include "secrets.h"
 #include "ota.h"
 
+
 WiFiManager wifiManager;
+WiFiClient espClient;
+
+void merde(char* topic, byte* payload, unsigned int length) {
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i = 0; i < length; i++) {
+        Serial.print((char)payload[i]);
+    }
+}
+IPAddress mqttsrv(172, 16, 10, 251);
+
+PubSubClient client(mqttsrv, 1883, espClient);
+
+
 
 MDNSResponder mdns;
 
@@ -54,7 +72,7 @@ bool updateOTA(){
         default:
            Serial.println("Unknown error");
     }
-    return (ESPhttpUpdate.getLastError() == 11) ? true : false;
+    return (ret == 11) ? true : false;
 }
 
 
@@ -86,6 +104,73 @@ void setup_wifi() {
     }
 }
 
+
+/** Send sensors values to Thinkspeak server
+ *
+ * @temp temperature value
+ * @lum luminosity value
+ */
+void thingspeak_send(const float temp, const float hum, const unsigned int lum) {
+
+    if ( espClient.connect(TH_SERVER, 80) ) {
+
+        Serial.println("Connecting to thingspeak server");
+
+        String postStr = TH_APIKEY;
+        postStr +="&field1=";
+        postStr += String(temp);
+        postStr +="&field2=";
+        postStr += String(hum);
+        postStr +="&field3=";
+        postStr += String(lum);
+        postStr += "\r\n\r\n";
+
+        espClient.print("POST /update HTTP/1.1\n");
+        espClient.print("Host: api.thingspeak.com\n");
+        espClient.print("Connection: close\n");
+        espClient.print("X-THINGSPEAKAPIKEY: "+TH_APIKEY+"\n");
+        espClient.print("Content-Type: application/x-www-form-urlencoded\n");
+        espClient.print("Content-Length: ");
+        espClient.print(postStr.length());
+        espClient.print("\n\n");
+        espClient.print(postStr);
+
+        Serial.println("Sensors values sent to thingspeak server");
+        Serial.println();
+    }
+
+}
+
+
+/** Send sensors values to MQTT broker
+ *
+ * @temp temperature value
+ * @lum luminosity value
+ s
+ */
+void mqtt_send(const float temp, const float hum, const unsigned int lum) {
+
+//    client.setServer(mqttsrv, 1883);
+
+    while (!client.connected()) {
+        Serial.println("Connecting to MQTT...");
+ 
+        if (client.connect("ESP8266Client", "selinux", "cooldump" )) {
+ 
+            Serial.println("connected");
+            client.publish(TEMPERATURE_TOPIC, String(temp).c_str());
+            client.publish(HUMIDITY_TOPIC, String(hum).c_str());
+            client.publish(LIGHT_TOPIC, String(lum).c_str());
+
+        } else {
+ 
+            Serial.print("failed with state ");
+            Serial.print(client.state());
+            Serial.println();
+            delay(2000);
+         }
+    }
+}
 
 /**
  * 

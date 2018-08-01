@@ -30,11 +30,17 @@
 #define HOSTNAME        FQDN(ESPID)
 #define WIFI_AP_NAME    AP(ESPID)
 
+#define TEMPERATURE_TOPIC   "pub/sensors/temp/bathroom"
+#define HUMIDITY_TOPIC      "pub/sensors/humidity/bathroom"
+#define LIGHT_TOPIC         "pub/sensors/light/bathroom"
+
 #define FW_UPDATE_URL   "http://172.16.10.128:8080/firmware"
 
 bool updateOTA();
 void setup_wifi();
+void mqtt_send(const float temp, const float hum, const unsigned int lum);
 void resetWifi();
 void stopWifiUDP();
+
 
 #endif //__OTA_H__

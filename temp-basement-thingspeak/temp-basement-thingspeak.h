@@ -27,10 +27,6 @@
 
 #define DHTTYPE             DHT22     // DHT 22 (AM2302)
 
-#define TEMPERATURE_TOPIC   "pub/sensors/temp/bathroom"
-#define HUMIDITY_TOPIC      "pub/sensors/humidity/bathroom"
-#define LIGHT_TOPIC         "pub/sensors/light/bathroom"
-
 
 void mqtt_reconnect();
 
