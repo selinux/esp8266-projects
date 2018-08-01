@@ -21,7 +21,7 @@
 #define ANALOG_PIN          A0
 #define COMPARE_PIN         D6
 
-#define DHTPIN              D4         // Pin which is connected to the DHT sensor.
+#define DHT_PIN             D4         // Pin which is connected to the DHT sensor.
 
 #define SLEEP               180
 

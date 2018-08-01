@@ -82,6 +82,7 @@ void setup_wifi() {
         Serial.println(HOSTNAME);
         Serial.print("IP address:\t");
         Serial.println(WiFi.localIP());           // Send the IP address of the ESP8266 to the computer
+        Serial.println("\n");
     }
 }
 

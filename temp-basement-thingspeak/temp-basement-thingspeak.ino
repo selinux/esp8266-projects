@@ -18,9 +18,8 @@
  */
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <Adafruit_Sensor.h>
-#include <DHT.h>
-#include <DHT_U.h>
+#include "DHTesp.h"
+
 
 #include "temp-basement-thingspeak.h"
 #include "secrets.h"
@@ -31,7 +30,7 @@
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-DHT_Unified dht(DHTPIN, DHTTYPE);
+DHTesp dht;
 
 int measureTime;
 
@@ -57,38 +56,22 @@ void setup() {
 /******* Do the job **********/
 
     unsigned int lum = get_luminosity();
-    float temp = 0.0;
-    float hum = 0.0;
 
-    dht.begin();
-    sensor_t sensor;
-    dht.temperature().getSensor(&sensor);
-    sensors_event_t event;  
-    dht.temperature().getEvent(&event);
+    dht.setup(DHT_PIN, DHTesp::DHT22); // Connect DHT sensor to GPIO 17
 
-    if (isnan(event.temperature)) {
-        Serial.println("Something went wrong with DHT22 temperature...waiting for watchdog reset");
-        Serial.println();
-        
-    } else {
-        temp = event.temperature;
-        Serial.print("\tTemperature :\t");
-        Serial.print(temp);
-        Serial.println(" °C");
-    }
+    delay(dht.getMinimumSamplingPeriod());
 
-    dht.humidity().getEvent(&event);
+    float temp = dht.getTemperature();
+    float hum = dht.getHumidity();
 
-    if (isnan(event.relative_humidity)) {
-        Serial.println("Something went wrong with DHT22 humidity...waiting for watchdog reset");
-        Serial.println();
-        
-    } else {
-        hum = event.relative_humidity;
-        Serial.print("\tHumidity :\t");
-        Serial.print(hum);
-        Serial.println("%");
-    }
+    Serial.print(dht.getStatusString());
+    Serial.print("\t");
+    Serial.print(temp, 1);
+    Serial.print(" °C\t\t");
+    Serial.print(hum, 1);
+    Serial.print(" %\t\t");
+    Serial.print(dht.computeHeatIndex(temp, hum, false), 1);
+    Serial.println(" °C\n\n");
 
 /******* Send values **********/
 
