@@ -19,17 +19,19 @@
 
 
 #define ANALOG_PIN          A0
-#define THERMO_PIN          D6
+#define COMPARE_PIN         D6
+
+#define THERMO_PIN          14
 #define DHTPIN              D4         // Pin which is connected to the DHT sensor.
 
-#define SLEEP               240
+#define SLEEP               180
 
 #define DHTTYPE           DHT22     // DHT 22 (AM2302)
 
-#define OUT_TEMPERATURE_TOPIC   "pub/sensor_window/outside_temperature"
-#define IN_TEMPERATURE_TOPIC   "pub/sensor_window/inside_temperature"
-#define HUMIDITY_TOPIC   "pub/sensor_window/humidity"
-#define LIGHT_TOPIC         "pub/sensor_window/light"
+#define OUT_TEMPERATURE_TOPIC  "pub/sensors/temp_out/window"
+#define IN_TEMPERATURE_TOPIC   "pub/sensors/temp/window"
+#define HUMIDITY_TOPIC         "pub/sensors/humidity/window"
+#define LIGHT_TOPIC            "pub/sensors/brightness/window"
 
 #define DEBUG
 

@@ -19,18 +19,17 @@
 
 
 #define ANALOG_PIN          A0
-#define COMPARE_PIN         D6
-#define THERMO_PIN          14
+#define THERMO_PIN          D6
 #define DHTPIN              D4         // Pin which is connected to the DHT sensor.
 
 #define SLEEP               60
 
 
-#define TEMPERATURE_TOPIC   "pub/sensor_inside/temperature"
-#define PRESSURE_TOPIC      "pub/sensor_inside/pressure"
-#define ALTITUDE_TOPIC      "pub/sensor_inside/altitude"
-#define LIGHT_TOPIC         "pub/sensor_inside/light"
-#define GEIGER_TOPIC        "pub/sensor_inside/geiger"
+#define TEMPERATURE_TOPIC   "pub/sensors/temperature/sinux-02"
+#define PRESSURE_TOPIC      "pub/sensor_inside/pressure/sinux-02"
+#define ALTITUDE_TOPIC      "pub/sensor_inside/altitude/sinux-02"
+#define LIGHT_TOPIC         "pub/sensor_inside/light/sinux-02"
+#define GEIGER_TOPIC        "pub/sensor_inside/geiger/sinux-02"
 
 #define DEBUG
 

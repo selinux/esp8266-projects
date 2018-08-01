@@ -20,19 +20,17 @@
 
 #define ANALOG_PIN          A0
 #define COMPARE_PIN         D6
+
 #define DHTPIN              D4         // Pin which is connected to the DHT sensor.
 
-#define SLEEP               60
+#define SLEEP               180
 
 #define DHTTYPE             DHT22     // DHT 22 (AM2302)
 
-#define TEMPERATURE_TOPIC   "pub/sensor_bathroom/outside_temperature"
-#define HUMIDITY_TOPIC      "pub/sensor_bathroom/humidity"
-#define LIGHT_TOPIC         "pub/sensor_bathroom/light"
+#define TEMPERATURE_TOPIC   "pub/sensors/temp/bathroom"
+#define HUMIDITY_TOPIC      "pub/sensors/humidity/bathroom"
+#define LIGHT_TOPIC         "pub/sensors/light/bathroom"
 
-#define DEBUG
-
-#define MQTT_PORT           1883
 
 void mqtt_reconnect();
 

@@ -16,23 +16,29 @@
  *
  * =====================================================================================
  */
-
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <ESP8266mDNS.h>
 
 #include "temp-basement-thingspeak.h"
 #include "secrets.h"
+#include "ota.h"
+
+#define DEBUG
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+MDNSResponder mdns;
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
 int measureTime;
+
+
 
 void setup() {
 
@@ -60,9 +66,19 @@ void setup() {
 #endif
     }
 
-#ifdef DEBUG
     Serial.println("");
     Serial.println("WiFi connected");
+    if (mdns.begin(HOSTNAME, WiFi.localIP())) {
+        Serial.println("MDNS responder started");
+        Serial.println(HOSTNAME);
+        Serial.print("IP address:\t");
+        Serial.println(WiFi.localIP());           // Send the IP address of the ESP8266 to the computer
+
+  }
+
+/******* OTA **********/
+#ifdef OTA
+    bool isUpdating = updateOTA();
 #endif
 
 /******* Do the job **********/
@@ -78,52 +94,50 @@ void setup() {
     dht.temperature().getEvent(&event);
 
     if (isnan(event.temperature)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 temperature...waiting for watchdog reset");
+        Serial.println("Something went wrong with DHT22 temperature...waiting for watchdog reset");
         Serial.println();
-#endif
-        while(1){}
         
     } else {
         temp = event.temperature;
-#ifdef DEBUG            
-        Serial.print("    Temperature: ");
+        Serial.print("\tTemperature :\t");
         Serial.print(temp);
-        Serial.println(" *C");
-#endif            
+        Serial.println(" °C");
     }
 
     dht.humidity().getEvent(&event);
 
     if (isnan(event.relative_humidity)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 humidity...waiting for watchdog reset");
+        Serial.println("Something went wrong with DHT22 humidity...waiting for watchdog reset");
         Serial.println();
-#endif
-        while(1){}
         
     } else {
         hum = event.relative_humidity;
-#ifdef DEBUG
-        Serial.print("    Humidity: ");
+        Serial.print("\tHumidity :\t");
         Serial.print(hum);
         Serial.println("%");
-#endif 
-        }
+    }
 
 /******* Send values **********/
 
     thingspeak_send(temp, hum, lum);
+
+    client.setServer(MQTT_SERVER, 1883);
+    
+    client.loop();
     mqtt_send(temp, hum, lum);
 
 
-#ifdef DEBUG
-    Serial.println("ESP8266 in sleep mode");
-#endif
-
 /******* entering in deep sleep **********/
 
-    ESP.deepSleep(SLEEP * 1000000);
+    if(!isUpdating) {
+        ESP.deepSleep(SLEEP * 1000000);
+        Serial.print(ESPID);
+        Serial.println(" in sleep mode");
+
+    } else {
+        Serial.println("Updating...");
+    }
+
 }
 
 
@@ -144,9 +158,7 @@ void thingspeak_send(float temp, float hum, unsigned int lum) {
 
     if ( espClient.connect(TH_SERVER, 80) ) {
 
-#ifdef DEBUG
         Serial.println("Connecting to thingspeak server");
-#endif
 
         String postStr = TH_APIKEY;
         postStr +="&field1=";
@@ -167,13 +179,11 @@ void thingspeak_send(float temp, float hum, unsigned int lum) {
         espClient.print("\n\n");
         espClient.print(postStr);
 
-#ifdef DEBUG
         Serial.println("Sensors values sent to thingspeak server");
         Serial.println();
-#endif
     }
 
-    espClient.stop();
+//    espClient.stop();
 }
 
 
@@ -185,25 +195,49 @@ void thingspeak_send(float temp, float hum, unsigned int lum) {
  */
 void mqtt_send(float temp, float hum, unsigned int lum) {
 
-    client.setServer(MQTT_SERVER, 1883);
+//
+//    bool res = client.connect(ESPID, MQTT_USER, MQTT_PASSWORD);
+//    
+    // Loop until we're reconnected
+    while (!client.connected()) {
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        if (client.connect(ESPID, "selinux", "cooldump")) {
+            Serial.println("connected");
+            // Once connected, publish an announcement...
+            client.publish("outTopic", "hello world");
+            // ... and resubscribe
+            client.subscribe("inTopic");
+        } else {
+            Serial.print("failed, rc=");
+            Serial.print(client.state());
+            Serial.println(" try again in 5 seconds");
+            // Wait 5 seconds before retrying
+            delay(5000);
+        }
+    }
 
-    if (!client.connected())
-        mqtt_reconnect();
 
-#ifdef DEBUG
     Serial.println("Connected to MQTT server");
     Serial.println();
-#endif
-
-    client.loop();
-    client.publish(TEMPERATURE_TOPIC, String(temp).c_str(), true);
-    client.publish(HUMIDITY_TOPIC, String(hum).c_str(), true);
-    client.publish(LIGHT_TOPIC, String(lum).c_str(), true);
-
-#ifdef DEBUG
+    Serial.print(TEMPERATURE_TOPIC);
+    Serial.print("\t");
+    Serial.println(String(temp).c_str());
+    Serial.print(HUMIDITY_TOPIC);
+    Serial.print("\t");
+    Serial.println(String(hum).c_str());
+    Serial.print(LIGHT_TOPIC);
+    Serial.print("\t");
+    Serial.println(String(lum).c_str());
     Serial.println("Sensors values sent to MQTT server");
     Serial.println();
-#endif
+
+
+    client.publish("test", "hello world esinux03");
+    client.publish(TEMPERATURE_TOPIC, String(temp).c_str());
+    client.publish(HUMIDITY_TOPIC, String(hum).c_str());
+    client.publish(LIGHT_TOPIC, String(lum).c_str());
+
 }
 
 
@@ -213,25 +247,21 @@ void mqtt_send(float temp, float hum, unsigned int lum) {
  */
 void mqtt_reconnect() {
 
-    int i = 0;
     // if not already connected Loop until reconnected
-
     while (!client.connected()) {
         Serial.print("Attempting MQTT connection...");
 
-        if (client.connect("ESP8266Client", MQTT_USER, MQTT_PASSWORD))
+        if (client.connect("ESP8266Client", "selinux", "cooldump")) {
             Serial.println("connected");
 
-        if (i++ > 10) {
-#ifdef DEBUG
+        } else {
             Serial.print("failed, rc=");
             Serial.print(client.state());
-            Serial.println("Something wrong with MQTT server...waiting for watchdog reset");
-            Serial.println();
-#endif
-            while(1){}
+            Serial.println(" try again in 2 seconds");
+            // Wait 2 seconds before retrying
+            delay(2000);
+        }
     }
-  }
 }
 
 
@@ -243,19 +273,20 @@ unsigned int get_luminosity() {
 
     pinMode(ANALOG_PIN, INPUT);
     pinMode(COMPARE_PIN, OUTPUT);
-
+ 
     // Compare pin act as a pull up
     digitalWrite(COMPARE_PIN, HIGH);
     delay(1);
+
     unsigned int val = analogRead(ANALOG_PIN);
     digitalWrite(COMPARE_PIN, LOW);
 
-#ifdef DEBUG
-    Serial.print("    Luminosity = ");
-    Serial.print(map(val, 0, 1023, 0, 99));
-    Serial.println();
-#endif
+//    Serial.println(val);
 
-    return map(val, 0, 1023, 0, 99);
+    Serial.print("\tLuminosity :\t");
+    Serial.print(map(val, 0, 199, 0, 99));
+    Serial.println();
+
+    return map(val, 0, 199, 0, 99);
 }
 

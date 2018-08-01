@@ -240,7 +240,7 @@ void mqtt_reconnect() {
     while (!client.connected()) {
         Serial.print("Attempting MQTT connection...");
 
-        if (client.connect("ESP8266Client", MQTT_USER, MQTT_PASSWORD))
+        if (client.connect(ESPID, MQTT_USER, MQTT_PASSWORD))
             Serial.println("connected");
 
         if (i++ > 10) {
@@ -263,8 +263,14 @@ void mqtt_reconnect() {
 unsigned int get_luminosity() {
 
     pinMode(ANALOG_PIN, INPUT);
+    pinMode(COMPARE_PIN, OUTPUT);
+ 
+    // Compare pin act as a pull up
+    digitalWrite(COMPARE_PIN, HIGH);
+    delay(1);
 
     unsigned int val = analogRead(ANALOG_PIN);
+    digitalWrite(COMPARE_PIN, LOW);
 
 #ifdef DEBUG
     Serial.print("    Luminosity = ");

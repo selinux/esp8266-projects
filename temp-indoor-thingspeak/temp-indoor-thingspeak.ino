@@ -20,16 +20,18 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <Adafruit_Sensor.h>
-#include <BME280.h>
+#include <Adafruit_BME280.h>
+//#include <BME280.h>
 
 #include "temp-indoor-thingspeak.h"
 #include "secrets.h"
+#include "ota.h"
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-BME280 bme;
+Adafruit_BME280 bme;
 bool metric = true;
 
 int measureTime, geigerRefTime;
@@ -68,10 +70,10 @@ void setup() {
 
 /******* Do the job **********/
 
-    while(!bme.begin()){
-        Serial.println("Could not find BME280 sensor!");
-        delay(1000);
-    }
+//    while(!bme.begin()){
+//        Serial.println("Could not find BME280 sensor!");
+//        delay(1000);
+//    }
 
     measureTime = millis();
     geigerRefTime = micros();
@@ -101,19 +103,19 @@ void loop() {
         
         float temp(NAN), hum(NAN), pressure;
         uint8_t pressureUnit(1);
-        bme.ReadData(pressure, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
-        float alt = bme.CalculateAltitude(metric);
+        //bme.ReadData(pressure, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+        float alt = 10;//bme.readAltitude(1013.25);
   
         unsigned int lum = get_luminosity();
   
         Serial.print("    Temp : ");
-        Serial.print(temp);
+        Serial.print(bme.readTemperature());
         Serial.println(" °C");
         Serial.print("    Pressure : ");
-        Serial.print(pressure);
+        Serial.print(bme.readPressure());
         Serial.println(" hPa");
         Serial.print("    Alt : ");
-        Serial.print(alt);
+        //Serial.print(bme.readAltitude(1013.25));
         Serial.println("m");
         Serial.print("    Geiger counter : ");
         Serial.print(cpm);
@@ -266,7 +268,10 @@ unsigned int get_luminosity() {
 void printBME280Data(Stream* client){
   float temp(NAN), hum(NAN), pres(NAN);
   uint8_t pressureUnit(3);   // unit: B000 = Pa, B001 = hPa, B010 = Hg, B011 = atm, B100 = bar, B101 = torr, B110 = N/m^2, B111 = psi
-  bme.ReadData(pres, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+  //bme.ReadData(pres, temp, hum, metric, pressureUnit);                // Parameters: (float& pressure, float& temp, float& humidity, bool hPa = true, bool celsius = false)
+  temp = bme.readTemperature();
+  hum = 10.1;//bme.hum();
+  pres = bme.readPressure();
   /* Alternatives to ReadData():
     float ReadTemperature(bool celsius = false);
     float ReadPressure(uint8_t unit = 0);
@@ -284,11 +289,11 @@ void printBME280Data(Stream* client){
   client->print("% RH");
   client->print("\t\tPressure: ");
   client->print(pres);
-  client->print(" atm");
+  client->print(" hPa");
 }
 void printBME280CalculatedData(Stream* client){
-  float altitude = bme.CalculateAltitude(metric);
-  float dewPoint = bme.CalculateDewPoint(metric);
+  float altitude = 100;//bme.CalculateAltitude(metric);
+  float dewPoint = 10.1;//bme.CalculateDewPoint(metric);
   client->print("\t\tAltitude: ");
   client->print(altitude);
   client->print((metric ? "m" : "ft"));
