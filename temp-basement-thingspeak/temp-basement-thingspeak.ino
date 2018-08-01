@@ -21,18 +21,15 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
-#include <ESP8266mDNS.h>
 
 #include "temp-basement-thingspeak.h"
 #include "secrets.h"
 #include "ota.h"
 
-#define DEBUG
 
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-MDNSResponder mdns;
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
@@ -42,39 +39,15 @@ int measureTime;
 
 void setup() {
 
-#ifdef DEBUG
     Serial.begin(115200);
     delay(10);
-
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(WI_SSID);
-#endif
+    Serial.println("\n");
 
 
 /******* re-connect to wifi ***********/
 
-    WiFi.begin(WI_SSID, WI_PASSWD);
-    while (WiFi.status() != WL_CONNECTED) {
+    setup_wifi();
 
-#ifdef DEBUG
-        Serial.print(".");
-        delay(500);
-#else
-        delay(100);
-#endif
-    }
-
-    Serial.println("");
-    Serial.println("WiFi connected");
-    if (mdns.begin(HOSTNAME, WiFi.localIP())) {
-        Serial.println("MDNS responder started");
-        Serial.println(HOSTNAME);
-        Serial.print("IP address:\t");
-        Serial.println(WiFi.localIP());           // Send the IP address of the ESP8266 to the computer
-
-  }
 
 /******* OTA **********/
 #ifdef OTA
@@ -154,7 +127,7 @@ void loop() {
  * @temp temperature value
  * @lum luminosity value
  */
-void thingspeak_send(float temp, float hum, unsigned int lum) {
+void thingspeak_send(const float temp, const float hum, const unsigned int lum) {
 
     if ( espClient.connect(TH_SERVER, 80) ) {
 
@@ -183,7 +156,7 @@ void thingspeak_send(float temp, float hum, unsigned int lum) {
         Serial.println();
     }
 
-//    espClient.stop();
+   espClient.stop();
 }
 
 
@@ -193,7 +166,7 @@ void thingspeak_send(float temp, float hum, unsigned int lum) {
  * @lum luminosity value
  s
  */
-void mqtt_send(float temp, float hum, unsigned int lum) {
+void mqtt_send(const float temp, const float hum, const unsigned int lum) {
 
 //
 //    bool res = client.connect(ESPID, MQTT_USER, MQTT_PASSWORD);

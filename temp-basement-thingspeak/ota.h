@@ -19,9 +19,18 @@
 #ifndef __OTA_H__
 #define __OTA_H__
 
-#define HOSTNAME "esinux01.local"  // Name of the device you want in mDNS.
-#define wifiSSID "esinux01_rescue"
-#define FW_UPDATE_URL "http://172.16.10.128:8080/firmware"
+#define OTA
+
+#define ESPID           "esinux03"
+
+#define CONCAT(a,b)     a ## b
+#define FQDN(x)         x".local"
+#define AP(x)           x"_rescue"
+
+#define HOSTNAME        FQDN(ESPID)
+#define WIFI_AP_NAME    AP(ESPID)
+
+#define FW_UPDATE_URL   "http://172.16.10.128:8080/firmware"
 
 bool updateOTA();
 void setup_wifi();
