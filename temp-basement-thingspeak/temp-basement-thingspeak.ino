@@ -25,7 +25,6 @@
 DHTesp dht;
 
 
-
 void setup() {
 
     Serial.begin(115200);
@@ -115,8 +114,8 @@ unsigned int get_luminosity() {
     digitalWrite(COMPARE_PIN, LOW);
 
     Serial.println("Luminosity :\t");
-    Serial.println(map(val, 0, 1023, 0, 99));
+    Serial.println(map(val, 0, 300, 0, 99));
     Serial.println("---------------------------------------------------");
-    return map(val, 0, 1023, 0, 99);
+    return map(val, 0, 300, 0, 99);
 }
 

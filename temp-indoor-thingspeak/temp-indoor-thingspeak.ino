@@ -248,19 +248,11 @@ void mqtt_reconnect() {
 unsigned int get_luminosity() {
 
     pinMode(ANALOG_PIN, INPUT);
-    pinMode(COMPARE_PIN, OUTPUT);
-
-    // Compare pin act as a pull up
-    digitalWrite(COMPARE_PIN, HIGH);
-    delay(1);
     unsigned int val = analogRead(ANALOG_PIN);
-    digitalWrite(COMPARE_PIN, LOW);
 
-#ifdef DEBUG
     Serial.print("    Luminosity = ");
     Serial.print(map(val, 0, 1023, 0, 100));
     Serial.println();
-#endif
 
     return map(val, 0, 1023, 0, 100);
 }

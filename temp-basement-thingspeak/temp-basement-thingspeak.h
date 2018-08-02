@@ -28,13 +28,4 @@
 #define DHTTYPE             DHT22     // DHT 22 (AM2302)
 
 
-void mqtt_reconnect();
-
-void thingspeak_send(float temp, float hum, unsigned int lum);
-
-void mqtt_send(float temp, float hum, unsigned int lum);
-
 unsigned int get_luminosity();
-
-float get_temperature();
-

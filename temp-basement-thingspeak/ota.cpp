@@ -32,23 +32,12 @@
 
 WiFiManager wifiManager;
 WiFiClient espClient;
-
-void merde(char* topic, byte* payload, unsigned int length) {
-    Serial.print("Message arrived [");
-    Serial.print(topic);
-    Serial.print("] ");
-    for (int i = 0; i < length; i++) {
-        Serial.print((char)payload[i]);
-    }
-}
-IPAddress mqttsrv(172, 16, 10, 251);
-
-PubSubClient client(mqttsrv, 1883, espClient);
-
 MDNSResponder mdns;
 
+PubSubClient client(MQTT_SERVER, 1883, espClient);
+
+
 unsigned long channelID = 146450;
-const char* TH_APIKEY = "5SB9TB967M77361H";
 
 
 /**

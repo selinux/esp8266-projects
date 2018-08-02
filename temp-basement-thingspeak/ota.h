@@ -23,7 +23,6 @@
 
 #define ESPID           "esinux03"
 
-#define CONCAT(a,b)     a ## b
 #define FQDN(x)         x".local"
 #define AP(x)           x"_rescue"
 
@@ -38,6 +37,8 @@
 
 bool updateOTA();
 void setup_wifi();
+
+void thingspeak_send(const float temp, const float hum, const unsigned int lum);
 void mqtt_send(const float temp, const float hum, const unsigned int lum);
 void resetWifi();
 void stopWifiUDP();

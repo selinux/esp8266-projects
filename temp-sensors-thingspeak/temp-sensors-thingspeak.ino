@@ -16,132 +16,106 @@
  *
  * =====================================================================================
  */
-
-#include <ESP8266WiFi.h>
+#include <BME280I2C.h>
+#include <Wire.h> 
+#include "DHTesp.h"
 #include <OneWire.h>
-#include <PubSubClient.h>
-#include <DHT.h>
-#include <DHT_U.h>
 
 #include "temp-sensors-thingspeak.h"
 #include "secrets.h"
 #include "ota.h"
 
-
-WiFiClient espClient;
-PubSubClient client(espClient);
+DHTesp dht;
 
 #ifdef ONEWIRE
 OneWire  ds(THERMO_PIN);  // on pin 2 (a 4.7K resistor is necessary)
 #endif
 
-DHT_Unified dht(DHTPIN, DHTTYPE);
 
-int measureTime;
+#define SERIAL_BAUD 115200
+BME280I2C bme;
 
 void setup() {
 
-#ifdef DEBUG
     Serial.begin(115200);
     delay(10);
-
-    Serial.println();
-    Serial.println();
-    Serial.print("Connecting to ");
-    Serial.println(WI_SSID);
-#endif
+    Serial.println("\n");
 
 
 /******* re-connect to wifi ***********/
 
-    WiFi.begin(WI_SSID, WI_PASSWD);
-    while (WiFi.status() != WL_CONNECTED) {
-
-#ifdef DEBUG
-        Serial.print(".");
-        delay(500);
-#else
-        delay(100);
-#endif
-    }
-
-#ifdef DEBUG
-    Serial.println("");
-    Serial.println("WiFi connected");
-#endif
+    setup_wifi();
 
 
 /******* OTA **********/
 #ifdef OTA
-    updateOTA();
+    bool isUpdating = updateOTA();
 #endif
 
 /******* Do the job **********/
 
-    float temp_out = 0;
-    unsigned int lum = get_luminosity();
-    float temp_in = 0.0;
-    float hum = 0.0;
+    float temp_out = 0.0;
 
+    // ONE WIRE
 #ifdef ONEWIRE
     temp_out = get_outside_temperature();
 #endif
 
-#ifdef DHTTEMP
-    dht.begin();
-    sensor_t sensor;
-    dht.temperature().getSensor(&sensor);
-    sensors_event_t event;  
-    dht.temperature().getEvent(&event);
+    // DHT
+    dht.setup(DHT_PIN, DHTesp::DHT22); // Connect DHT sensor to GPIO 17
+    delay(dht.getMinimumSamplingPeriod());
 
-    if (isnan(event.temperature)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT22 temperature...waiting for watchdog reset");
-        Serial.println();
-#endif
-        while(1){}
-        
-    } else {
-        temp_in = event.temperature;
-#ifdef DEBUG            
-        Serial.print("    Temperature: ");
-        Serial.print(temp_in);
-        Serial.println(" *C");
-#endif            
+    float temp = dht.getTemperature();
+    float hum = dht.getHumidity();
+
+    Serial.println("state\ttemp\t\thumidity\ttemp avg");
+    Serial.println("---------------------------------------------------");
+    Serial.print(dht.getStatusString());
+    Serial.print("\t");
+    Serial.print(temp, 1);
+    Serial.print(" °C\t\t");
+    Serial.print(hum, 1);
+    Serial.print(" %\t\t");
+    Serial.print(dht.computeHeatIndex(temp, hum, false), 1);
+    Serial.println(" °C");
+    Serial.println("---------------------------------------------------");
+
+    // Brightness
+    unsigned int lum = get_luminosity();
+
+    // BME280
+    Wire.begin();
+    
+    while(!bme.begin())
+    {
+        Serial.println("Could not find BME280 sensor!");
+        delay(1000);
     }
 
-    dht.humidity().getEvent(&event);
+    float pres = get_pressure();
 
-    if (isnan(event.relative_humidity)) {
-#ifdef DEBUG          
-        Serial.println("Something went wrong with DHT20 humidity...waiting for watchdog reset");
-        Serial.println();
-#endif
-        while(1){}
-        
-    } else {
-        hum = event.relative_humidity;
-#ifdef DEBUG
-        Serial.print("    Humidity: ");
-        Serial.print(hum);
-        Serial.println("%");
-#endif 
-        }
-#else
-
-#endif
 /******* Send values **********/
 
-    thingspeak_send(temp_out, temp_in, hum, lum);
-    mqtt_send(temp_out, temp_in, hum, lum);
+    mqtt_send(temp_out, temp, hum, lum, pres);
 
-#ifdef DEBUG
-    Serial.println("ESP8266 in sleep mode");
-#endif
+    thingspeak_send(temp_out, temp, hum, lum, pres);
+
 
 /******* entering in deep sleep **********/
 
-    ESP.deepSleep(SLEEP * 1000000);
+    unsigned long pause = millis() + 4000;
+
+    Serial.println("Wait a while...");
+//    while(millis() < pause) {;}
+    
+    if(!isUpdating) {
+        Serial.print(ESPID);
+        Serial.println(" in sleep mode");
+        ESP.deepSleep(SLEEP * 1000000);
+
+    } else {
+        Serial.println("Updating...");
+    }
 }
 
 
@@ -153,109 +127,6 @@ void loop() {
 }
 
 
-/** Send sensors values to Thinkspeak server
- *
- * @temp temperature value
- * @lum luminosity value
- */
-void thingspeak_send(float temp_out, float temp_in, float hum, unsigned int lum) {
-
-    if ( espClient.connect(TH_SERVER, 80) ) {
-
-#ifdef DEBUG
-        Serial.println("Connecting to thingspeak server");
-#endif
-
-        String postStr = TH_APIKEY;
-        postStr +="&field1=";
-        postStr += String(temp_out);
-        postStr +="&field2=";
-        postStr += String(temp_in);
-        postStr +="&field3=";
-        postStr += String(hum);
-        postStr +="&field4=";
-        postStr += String(lum);
-        postStr += "\r\n\r\n";
-
-        espClient.print("POST /update HTTP/1.1\n");
-        espClient.print("Host: api.thingspeak.com\n");
-        espClient.print("Connection: close\n");
-        espClient.print("X-THINGSPEAKAPIKEY: "+TH_APIKEY+"\n");
-        espClient.print("Content-Type: application/x-www-form-urlencoded\n");
-        espClient.print("Content-Length: ");
-        espClient.print(postStr.length());
-        espClient.print("\n\n");
-        espClient.print(postStr);
-
-#ifdef DEBUG
-        Serial.println("Sensors values sent to thingspeak server");
-        Serial.println();
-#endif
-    }
-
-    espClient.stop();
-}
-
-
-/** Send sensors values to MQTT broker
- *
- * @temp temperature value
- * @lum luminosity value
- s
- */
-void mqtt_send(float temp_out, float temp_in, float hum, unsigned int lum) {
-
-    client.setServer(MQTT_SERVER, 1883);
-
-    if (!client.connected())
-        mqtt_reconnect();
-
-#ifdef DEBUG
-    Serial.println("Connected to MQTT server");
-    Serial.println();
-#endif
-
-    client.loop();
-    client.publish(OUT_TEMPERATURE_TOPIC, String(temp_out).c_str(), true);
-    client.publish(IN_TEMPERATURE_TOPIC, String(temp_in).c_str(), true);
-    client.publish(HUMIDITY_TOPIC, String(hum).c_str(), true);
-    client.publish(LIGHT_TOPIC, String(lum).c_str(), true);
-
-#ifdef DEBUG
-    Serial.println("Sensors values sent to MQTT server");
-    Serial.println();
-#endif
-}
-
-
-/** reconnect to MQTT broker
- *
- *  try 10 times and suicide
- */
-void mqtt_reconnect() {
-
-    int i = 0;
-    // if not already connected Loop until reconnected
-
-    while (!client.connected()) {
-        Serial.print("Attempting MQTT connection...");
-
-        if (client.connect(ESPID, MQTT_USER, MQTT_PASSWORD))
-            Serial.println("connected");
-
-        if (i++ > 10) {
-#ifdef DEBUG
-            Serial.print("failed, rc=");
-            Serial.print(client.state());
-            Serial.println("Something wrong with MQTT server...waiting for watchdog reset");
-            Serial.println();
-#endif
-            while(1){}
-    }
-  }
-}
-
-
 /** Get luminosity from photo-resistor
  *
  * @return a mapped value (0..100%)
@@ -263,20 +134,11 @@ void mqtt_reconnect() {
 unsigned int get_luminosity() {
 
     pinMode(ANALOG_PIN, INPUT);
-    pinMode(COMPARE_PIN, OUTPUT);
- 
-    // Compare pin act as a pull up
-    digitalWrite(COMPARE_PIN, HIGH);
-    delay(1);
-
     unsigned int val = analogRead(ANALOG_PIN);
-    digitalWrite(COMPARE_PIN, LOW);
 
-#ifdef DEBUG
-    Serial.print("    Luminosity = ");
-    Serial.print(map(val, 0, 1023, 0, 100));
-    Serial.println();
-#endif
+    Serial.println("Luminosity :\t");
+    Serial.println(map(val, 0, 1023, 0, 99));
+    Serial.println("---------------------------------------------------");
 
     return map(val, 0, 1023, 0, 100);
 }
@@ -301,17 +163,15 @@ float get_outside_temperature() {
         delay(250);
 
 
-#ifdef DEBUG
         Serial.println("One-wire sensore not found");
         Serial.println();
-#endif
+
         if(++i > 10) {
 
 #ifdef DEBUG
             Serial.println("Something wrong with temp sensor...waiting for watchdog reset");
             Serial.println();
 #endif
-            while(1){}
         }
     }
 
@@ -359,3 +219,45 @@ float get_outside_temperature() {
 }
 #endif
 
+/** Get luminosity from photo-resistor
+ *
+ * @return a mapped value (0..100%)
+ */
+float get_pressure() {
+    float temp(NAN), hum(NAN), pres(NAN);
+    
+//    BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+//    BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+    
+    bme.read(pres, temp, hum);
+//    printBME280Data(&Serial);
+
+    return pres;
+}
+
+
+/** Get luminosity from photo-resistor
+ *
+ * @return a mapped value (0..100%)
+ */
+void printBME280Data(Stream* client) {
+
+   float temp(NAN), hum(NAN), pres(NAN);
+
+//   BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+//   BME280::PresUnit presUnit(BME280::PresUnit_Pa);
+//
+//   bme.read(pres, temp, hum, tempUnit, presUnit);
+
+   client->print("Temp: ");
+   client->print(temp);
+//   client->print("°"+ String(tempUnit == BME280::TempUnit_Celsius ? 'C' :'F'));
+   client->print("\t\tHumidity: ");
+   client->print(hum);
+   client->print("% RH");
+   client->print("\t\tPressure: ");
+   client->print(pres);
+   client->println(" Pa");
+
+   delay(1000);
+}
