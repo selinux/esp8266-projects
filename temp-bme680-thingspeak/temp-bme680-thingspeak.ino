@@ -33,6 +33,9 @@
 Adafruit_BME680 bme; // I2C
 #define SEALEVELPRESSURE_HPA (1013.25)
 
+unsigned long timerOTA;
+unsigned long timerMeasure;
+
 void setup() {
 
     Serial.begin(115200);
@@ -49,24 +52,77 @@ void setup() {
     bool isUpdating = updateOTA();
 #endif
 
-/******* Do the job **********/
-    if (!bme.begin(0x76)) {
-      Serial.println("Could not find a valid BME680 sensor, check wiring!");
-      while (1);
+/******* entering in deep sleep **********/
+
+    if(!isUpdating) {
+        /******* Do the job **********/
+        if (!bme.begin(0x76)) {
+            Serial.println("Could not find a valid BME680 sensor, check wiring!");
+            while (1);
+        }
+
+        // Set up oversampling and filter initialization
+        bme.setTemperatureOversampling(BME680_OS_8X);
+        bme.setHumidityOversampling(BME680_OS_2X);
+        bme.setPressureOversampling(BME680_OS_4X);
+        bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+        bme.setGasHeater(320, 150); // 320*C for 150 ms
+
+    } else {
+        Serial.println("Updating...");
     }
+
+}
+
+
+void loop() {
+
+    if( millis() > timerOTA ) {
+        Serial.println("Perform sensors measurement...");
+        updateOTA();
+        timerOTA = millis() + SLEEP_OTA*1000;
+
+    }
+
+    if( millis() > timerMeasure ) {
+
+        timerMeasure = millis() + SLEEP_MEASURES*1000;
+        Serial.println("Performing sensors measurement...");
+        measure();
+    }
+}
+
+
+/** Get luminosity from photo-resistor
+ *
+ * @return a mapped value (0..100%)
+ */
+unsigned int get_luminosity() {
+
+    pinMode(ANALOG_PIN, INPUT);
+    pinMode(COMPARE_PIN, OUTPUT);
+ 
+    // Compare pin act as a pull up
+    digitalWrite(COMPARE_PIN, HIGH);
+    delay(1);
+
+    unsigned int val = analogRead(ANALOG_PIN);
+    digitalWrite(COMPARE_PIN, LOW);
+
+    Serial.println("Luminosity :\t");
+    Serial.println(map(val, 0, 300, 0, 99));
+    Serial.println("---------------------------------------------------");
+    return map(val, 0, 300, 0, 99);
+}
+
+
+void measure() {
 
     float val[6];
 
-    // Set up oversampling and filter initialization
-    bme.setTemperatureOversampling(BME680_OS_8X);
-    bme.setHumidityOversampling(BME680_OS_2X);
-    bme.setPressureOversampling(BME680_OS_4X);
-    bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    bme.setGasHeater(320, 150); // 320*C for 150 ms
-
     if (! bme.performReading()) {
-      Serial.println("Failed to perform reading :(");
-      return;
+        Serial.println("Failed to perform reading :(");
+        return;
     }
     val[0] = bme.temperature;
     val[1] = bme.pressure/100.0;
@@ -102,55 +158,8 @@ void setup() {
 
 
 
-/******* Send values **********/
-
+    /******* Send values **********/
     mqtt_send(val[0], val[1], val[2], val[3], val[4], val[5]);
-
     thingspeak_send(val[0], val[1], val[2], val[3], val[4], val[5]);
 
-
-
-/******* entering in deep sleep **********/
-
-    if(!isUpdating) {
-        Serial.print(ESPID);
-        Serial.println(" in sleep mode");
-        ESP.deepSleep(SLEEP * 1000000);
-
-    } else {
-        Serial.println("Updating...");
-    }
-
 }
-
-
-void loop() {
-
-    /* After deep sleep reset is activated by pin D0 (bridged to RST)
-     * setup() is re-executed but loop() is not
-     */
-}
-
-
-/** Get luminosity from photo-resistor
- *
- * @return a mapped value (0..100%)
- */
-unsigned int get_luminosity() {
-
-    pinMode(ANALOG_PIN, INPUT);
-    pinMode(COMPARE_PIN, OUTPUT);
- 
-    // Compare pin act as a pull up
-    digitalWrite(COMPARE_PIN, HIGH);
-    delay(1);
-
-    unsigned int val = analogRead(ANALOG_PIN);
-    digitalWrite(COMPARE_PIN, LOW);
-
-    Serial.println("Luminosity :\t");
-    Serial.println(map(val, 0, 300, 0, 99));
-    Serial.println("---------------------------------------------------");
-    return map(val, 0, 300, 0, 99);
-}
-

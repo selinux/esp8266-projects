@@ -20,6 +20,8 @@
 #define DEBUG
 
 #define ANALOG_PIN          A0
+#define SCK_PIN             D1
+#define SDA_PIN             D2
 #define THERMO_PIN          D6
 #define DHT_PIN             D4         // Pin which is connected to the DHT sensor.
 
@@ -28,6 +30,8 @@
 #define DHTTYPE             DHT22     // DHT 22 (AM2302)
 
 #define MQTT_PORT           1883
+
+#define SERIAL_BAUD 115200
 
 unsigned int get_luminosity();
 float get_pressure();

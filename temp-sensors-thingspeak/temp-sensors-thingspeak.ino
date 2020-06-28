@@ -16,7 +16,8 @@
  *
  * =====================================================================================
  */
-#include <BME280I2C.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
 #include <Wire.h> 
 #include "DHTesp.h"
 #include <OneWire.h>
@@ -27,13 +28,10 @@
 
 DHTesp dht;
 
-#ifdef ONEWIRE
 OneWire  ds(THERMO_PIN);  // on pin 2 (a 4.7K resistor is necessary)
-#endif
 
+Adafruit_BME280 bme;
 
-#define SERIAL_BAUD 115200
-BME280I2C bme;
 
 void setup() {
 
@@ -54,45 +52,38 @@ void setup() {
 
 /******* Do the job **********/
 
-    float temp_out = 0.0;
+    // BME280
+    if (!bme.begin(0x76)) {
+        Serial.println("Could not find a valid BME280 sensor, check wiring!");
+        while (1);
+    }
 
     // ONE WIRE
-#ifdef ONEWIRE
-    temp_out = get_outside_temperature();
-#endif
-
-    // DHT
-    dht.setup(DHT_PIN, DHTesp::DHT22); // Connect DHT sensor to GPIO 17
-    delay(dht.getMinimumSamplingPeriod());
-
-    float temp = dht.getTemperature();
-    float hum = dht.getHumidity();
-
-    Serial.println("state\ttemp\t\thumidity\ttemp avg");
-    Serial.println("---------------------------------------------------");
-    Serial.print(dht.getStatusString());
-    Serial.print("\t");
-    Serial.print(temp, 1);
-    Serial.print(" °C\t\t");
-    Serial.print(hum, 1);
-    Serial.print(" %\t\t");
-    Serial.print(dht.computeHeatIndex(temp, hum, false), 1);
-    Serial.println(" °C");
-    Serial.println("---------------------------------------------------");
+    float temp_out = get_outside_temperature();
 
     // Brightness
     unsigned int lum = get_luminosity();
 
-    // BME280
-    Wire.begin();
-    
-    while(!bme.begin())
-    {
-        Serial.println("Could not find BME280 sensor!");
-        delay(1000);
-    }
 
-    float pres = get_pressure();
+    float temp = bme.readTemperature();
+    float hum = bme.readHumidity();
+    float pres = bme.readPressure() / 100.0F;
+    float alt = bme.readAltitude(1013.25);
+
+    Serial.print("    Temp : ");
+    Serial.print(temp);
+    Serial.println(" °C");
+    Serial.print("    Humidity : ");
+    Serial.print(hum);
+    Serial.println(" %");
+    Serial.print("    Pressure : ");
+    Serial.print(pres);
+    Serial.println(" hPa");
+    Serial.print("    Alt : ");
+    Serial.print(alt);
+    Serial.println("m");
+
+//    float pres = get_pressure();
 
 /******* Send values **********/
 
@@ -102,12 +93,12 @@ void setup() {
 
 
 /******* entering in deep sleep **********/
-
-    unsigned long pause = millis() + 4000;
-
-    Serial.println("Wait a while...");
+//    unsigned long pause = millis() + 4000;
+//    Serial.println("Wait a while...");
 //    while(millis() < pause) {;}
-    
+
+    delay(2000);
+
     if(!isUpdating) {
         Serial.print(ESPID);
         Serial.println(" in sleep mode");
@@ -143,7 +134,7 @@ unsigned int get_luminosity() {
     return map(val, 0, 1023, 0, 100);
 }
 
-#ifdef ONEWIRE
+
 /** Get temperature from DS18B20
  *
  * @return sensor value (float)
@@ -216,48 +207,4 @@ float get_outside_temperature() {
 #endif
 
     return (float)raw / 16.0;
-}
-#endif
-
-/** Get luminosity from photo-resistor
- *
- * @return a mapped value (0..100%)
- */
-float get_pressure() {
-    float temp(NAN), hum(NAN), pres(NAN);
-    
-//    BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-//    BME280::PresUnit presUnit(BME280::PresUnit_Pa);
-    
-    bme.read(pres, temp, hum);
-//    printBME280Data(&Serial);
-
-    return pres;
-}
-
-
-/** Get luminosity from photo-resistor
- *
- * @return a mapped value (0..100%)
- */
-void printBME280Data(Stream* client) {
-
-   float temp(NAN), hum(NAN), pres(NAN);
-
-//   BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
-//   BME280::PresUnit presUnit(BME280::PresUnit_Pa);
-//
-//   bme.read(pres, temp, hum, tempUnit, presUnit);
-
-   client->print("Temp: ");
-   client->print(temp);
-//   client->print("°"+ String(tempUnit == BME280::TempUnit_Celsius ? 'C' :'F'));
-   client->print("\t\tHumidity: ");
-   client->print(hum);
-   client->print("% RH");
-   client->print("\t\tPressure: ");
-   client->print(pres);
-   client->println(" Pa");
-
-   delay(1000);
 }

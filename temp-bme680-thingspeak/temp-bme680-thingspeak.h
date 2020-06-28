@@ -23,7 +23,9 @@
 #define SCK_PIN             D1
 #define SDA_PIN             D2
 
-#define SLEEP               180
+#define SLEEP_OTA           600
+#define SLEEP_MEASURES      180
 
 
 unsigned int get_luminosity();
+void measure();

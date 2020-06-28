@@ -131,6 +131,7 @@ void thingspeak_send(float temp, float hum, float pres, float alt, float cpm) {
     ThingSpeak.setField( 5, String(cpm).c_str());
 
     if (ThingSpeak.writeFields( channelID, TH_APIKEY ) ){
+        Serial.println();
         Serial.println("Successfully sent values to ThingSpeak...");
     }
 

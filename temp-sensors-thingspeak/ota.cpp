@@ -15,15 +15,16 @@
  *
  * =====================================================================================
  */
+
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>            //Local DNS Server used for redirecting all requests to the configuration portal
-#include <ESP8266WebServer.h>     //Local WebServer used to serve the configuration portal
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <DNSServer.h>
+#include <WiFiManager.h>
+#include <ESP8266httpUpdate.h>
 
 #include <ESP8266mDNS.h>
-#include <PubSubClient.h>
-#include "ThingSpeak.h"
 #include <ArduinoJson.h>
+#include <ThingSpeak.h>
+#include <PubSubClient.h>
 
 #include <ESP8266httpUpdate.h>
 
@@ -32,9 +33,8 @@
 
 
 WiFiManager wifiManager;
-WiFiClient espClient;
 MDNSResponder mdns;
-
+WiFiClient espClient;
 PubSubClient client(MQTT_SERVER, 1883, espClient);
 
 
@@ -113,10 +113,9 @@ void thingspeak_send(const float temp_out, const float temp, const float hum, co
     ThingSpeak.setField( 5, String(pres).c_str());
    
     if (ThingSpeak.writeFields( channelID, TH_APIKEY ) ){
+        Serial.println();
         Serial.println("Successfully sent values to ThingSpeak...");       
     }
-
-//    ThingSpeak.writeField(channelID, 1, String(temp).c_str(), TH_APIKEY);
 
     espClient.stop();
 
@@ -146,22 +145,22 @@ void mqtt_send(const float temp_out, const float temp, const float hum, const un
 
             const int nb_sensors = 5;
             int idx[] = { 22, 20, 21, 24, 23};
-            float svalue[] = { temp, temp, float(int(hum)), float(lum), pres/100 };
-            char *dtype[] = { "Temp", "Temp", "Humidity", "General", "General"};
-            char *stype[] = { "DS18B20", "DHT22", "DHT22", "Photores", "BME280"};
+            float svalue[] = { temp_out, temp, float(int(hum)), float(lum), pres };
+            char *dtype[] = { "Temp out", "Temp", "Humidity", "Luminosity", "Pressure"};
+            char *stype[] = { "DS18B20", "BME280", "BME280", "Photores", "BME280"};
 
             for (int i = 0; i < 5;i++) {
-                StaticJsonBuffer<1024> jsonBuffer;
-                JsonObject& data = jsonBuffer.createObject();
+                StaticJsonDocument<1024> doc;
+                JsonObject data = doc.to<JsonObject>();
                 data["idx"] = idx[i];
                 data["nvalue"] = (i == 2) ? svalue[i] : 0;
                 data["svalue"] = String(svalue[i]);
                 data["dtype"] = dtype[i];
                 data["stype"] = stype[i];
                 String output;
-                data.printTo(output);
+                serializeJson(data, output);
                 client.publish(DOMOTICZ_TOPIC, output.c_str(), true);
-                data.printTo(Serial);
+                serializeJson(data, Serial);
             }
 #endif   
         } else {
