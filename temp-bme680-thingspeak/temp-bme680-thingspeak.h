@@ -1,13 +1,13 @@
 /*
  * =====================================================================================
  *
- *       Filename:  temp-sensors-thingspeak.h
+ *       Filename:  temp-bme680-thingspeak.h
  *
  *    Description:  Temperature and brightness sensors on a ESP8266 who broadcast to 
  *                  thingspeak server and MQTT broker
  *
  *        Version:  1.0
- *        Created:  04. 08. 2016 16:59:30
+ *        Created:  27. 06. 2020 11:39:30
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -18,9 +18,12 @@
  */
 
 
+#define ANALOG_PIN          A0
+#define COMPARE_PIN         D6
+#define SCK_PIN             D1
+#define SDA_PIN             D2
+
 #define SLEEP               180
 
 
-
-#define MQTT_PORT           1883
-
+unsigned int get_luminosity();

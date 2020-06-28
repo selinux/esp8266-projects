@@ -23,6 +23,7 @@
 #include <ESP8266mDNS.h>
 #include <PubSubClient.h>
 #include "ThingSpeak.h"
+#include <ArduinoJson.h>
 
 #include <ESP8266httpUpdate.h>
 
@@ -141,7 +142,28 @@ void mqtt_send(const float temp_out, const float temp, const float hum, const un
             client.publish(HUMIDITY_TOPIC, String(hum).c_str());
             client.publish(LIGHT_TOPIC, String(lum).c_str());
             client.publish(PRESSURE_TOPIC, String(pres).c_str());
+#ifdef DOMOTICZ
 
+            const int nb_sensors = 5;
+            int idx[] = { 22, 20, 21, 24, 23};
+            float svalue[] = { temp, temp, float(int(hum)), float(lum), pres/100 };
+            char *dtype[] = { "Temp", "Temp", "Humidity", "General", "General"};
+            char *stype[] = { "DS18B20", "DHT22", "DHT22", "Photores", "BME280"};
+
+            for (int i = 0; i < 5;i++) {
+                StaticJsonBuffer<1024> jsonBuffer;
+                JsonObject& data = jsonBuffer.createObject();
+                data["idx"] = idx[i];
+                data["nvalue"] = (i == 2) ? svalue[i] : 0;
+                data["svalue"] = String(svalue[i]);
+                data["dtype"] = dtype[i];
+                data["stype"] = stype[i];
+                String output;
+                data.printTo(output);
+                client.publish(DOMOTICZ_TOPIC, output.c_str(), true);
+                data.printTo(Serial);
+            }
+#endif   
         } else {
  
             Serial.print("failed with state ");

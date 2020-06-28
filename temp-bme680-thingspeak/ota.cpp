@@ -103,12 +103,15 @@ void setup_wifi() {
  * @temp temperature value
  * @lum luminosity value
  */
-void thingspeak_send(const float temp, const float hum, const unsigned int lum) {
+void thingspeak_send(const float temp, const float pressure, const float hum, const float gas, const float alt, const unsigned int lum) {
   
     ThingSpeak.begin(espClient);
     ThingSpeak.setField( 1, String(temp).c_str());
-    ThingSpeak.setField( 2, String(hum).c_str());
-    ThingSpeak.setField( 3, String(lum).c_str());
+    ThingSpeak.setField( 2, String(pressure).c_str());
+    ThingSpeak.setField( 3, String(hum).c_str());
+    ThingSpeak.setField( 4, String(gas).c_str());
+    ThingSpeak.setField( 5, String(alt).c_str());
+    ThingSpeak.setField( 6, String(lum).c_str());
    
     if (ThingSpeak.writeFields( channelID, TH_APIKEY ) ){
         Serial.println("Successfully sent values to ThingSpeak...");       
@@ -127,7 +130,7 @@ void thingspeak_send(const float temp, const float hum, const unsigned int lum) 
  * @lum luminosity value
  s
  */
-void mqtt_send(const float temp, const float hum, const unsigned int lum) {
+void mqtt_send(const float temp, const float pressure, const float hum, const float gas, const float alt, const unsigned int lum) {
 
     while (!client.connected()) {
         Serial.println("Connecting to MQTT...");
@@ -136,31 +139,34 @@ void mqtt_send(const float temp, const float hum, const unsigned int lum) {
  
             Serial.println("connected");
             client.publish(TEMPERATURE_TOPIC, String(temp).c_str());
+            client.publish(PRESSURE_TOPIC, String(pressure).c_str());
             client.publish(HUMIDITY_TOPIC, String(hum).c_str());
+            client.publish(GAS_TOPIC, String(gas).c_str());
+            client.publish(ALT_TOPIC, String(alt).c_str());
             client.publish(LIGHT_TOPIC, String(lum).c_str());
 
 #ifdef DOMOTICZ
-            const int nb_sensors = 3;
-            int idx[] = { 29, 30, 31 };
-            float svalue[] = { temp, float(int(hum)), float(lum) };
-            char *dtype[] = { "Temp", "Humidity", "General" };
-            char *stype[] = { "DHT22", "DHT22", "Photores" };
+            const int nb_sensors = 6;
+            int idx[] = { 55, 50, 53, 54, 56, 52 };
+            float svalue[] = { temp, pressure, int(hum), gas, alt, float(lum) };
+            char *dtype[] = { "Temp", "Pressure", "Humidity", "Gas resistance", "Altitude", "Luminosity" };
+            char *stype[] = { "BME680", "BME680", "BME680", "BME680", "BME680", "Photores" };
 
             for (int i = 0; i < nb_sensors; i++) {
-                StaticJsonBuffer<1024> jsonBuffer;
-                JsonObject& data = jsonBuffer.createObject();
+                StaticJsonDocument<1024> doc;
+                JsonObject data = doc.to<JsonObject>();
                 data["idx"] = idx[i];
-                data["nvalue"] = (i == 1) ? svalue[i] : 0;
+                data["nvalue"] = ( i == 2 ) ? svalue[i] : 0;
                 data["svalue"] = String(svalue[i]);
                 data["dtype"] = dtype[i];
                 data["stype"] = stype[i];
                 String output;
-                data.printTo(output);
+                serializeJson(data, output);
                 client.publish(DOMOTICZ_TOPIC, output.c_str(), true);
-                data.printTo(Serial);
+                serializeJson(data, Serial);
             }
 #endif    
-            Serial.println("Sensors values sent to MQTT server");
+            Serial.println("\nSensors values sent to MQTT server");
             Serial.println();
 
         } else {

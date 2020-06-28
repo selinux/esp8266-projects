@@ -20,12 +20,9 @@
 #define __OTA_H__
 
 #define OTA
-#define ONEWIRE
-#define DHTTEMP
-#define BME280
 #define DOMOTICZ
 
-#define ESPID           "esinux01"
+#define ESPID           "esinux04"
 
 #define FQDN(x)         x".home"
 #define AP(x)           x"_rescue"
@@ -33,20 +30,26 @@
 #define HOSTNAME        FQDN(ESPID)
 #define WIFI_AP_NAME    AP(ESPID)
 
-#define OUT_TEMP_TOPIC  "pub/sensors/temp_out/window"
-#define IN_TEMP_TOPIC   "pub/sensors/temp/window"
-#define HUMIDITY_TOPIC  "pub/sensors/humidity/window"
-#define LIGHT_TOPIC     "pub/sensors/brightness/window"
-#define PRESSURE_TOPIC  "pub/sensors/pressure/window"
-#define DOMOTICZ_TOPIC  "domoticz/in"
+#define TEMPERATURE_TOPIC   "pub/sensors/temp/desk"
+#define PRESSURE_TOPIC      "pub/sensors/pressure/desk"
+#define HUMIDITY_TOPIC      "pub/sensors/humidity/desk"
+#define GAS_TOPIC           "pub/sensors/gas/desk"
+#define ALT_TOPIC           "pub/sensors/altitude/desk"
+#define LIGHT_TOPIC         "pub/sensors/light/desk"
+#define DOMOTICZ_TOPIC      "domoticz/in"
 
-#define FW_UPDATE_URL   "http://172.16.10.251:8080/firmware"  // rpi3 address
+
+#define FW_UPDATE_URL   "http://172.16.10.128:8080/firmware"
+//#define FW_UPDATE_URL "http://10.42.65.196:8080/firmware"
 
 bool updateOTA();
 void setup_wifi();
-void thingspeak_send(const float temp_out, const float temp, const float hum, const unsigned int lum, const float pres);
-void mqtt_send(const float temp_out, const float temp, const float hum, const unsigned int lum, const float pres);
+
+void thingspeak_send(const float temp, const float pressure, const float hum, const float gas, const float alt, const unsigned int lum);
+void mqtt_send(const float temp, const float pressure, const float hum, const float gas, const float alt, const unsigned int lum);
 void resetWifi();
 void stopWifiUDP();
+void setup_Wifi();
+
 
 #endif //__OTA_H__
